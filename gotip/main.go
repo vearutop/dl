@@ -40,14 +40,15 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "download" {
 		switch len(os.Args) {
 		case 2:
-			if err := installTip(root, ""); err != nil {
+			if err := installTip(root, "", ""); err != nil {
 				log.Fatalf("gotip: %v", err)
 			}
 		case 3:
 			if _, err := strconv.Atoi(os.Args[2]); err != nil {
-				log.Fatalf("gotip: invalid CL number: %q", os.Args[2])
-			}
-			if err := installTip(root, os.Args[2]); err != nil {
+				if err := installTip(root, "", os.Args[2]); err != nil {
+					log.Fatalf("gotip: %v", err)
+				}
+			} else if err := installTip(root, os.Args[2], ""); err != nil {
 				log.Fatalf("gotip: %v", err)
 			}
 		default:
@@ -81,7 +82,7 @@ func main() {
 	os.Exit(0)
 }
 
-func installTip(root, clNumber string) error {
+func installTip(root, clNumber, branch string) error {
 	git := func(args ...string) error {
 		cmd := exec.Command("git", args...)
 		cmd.Stdin = os.Stdin
@@ -136,6 +137,32 @@ func installTip(root, clNumber string) error {
 			}
 		}
 		log.Printf("Fetching CL %v, Patch Set %v...", clNumber, patchSet)
+		if err := git("fetch", "origin", ref); err != nil {
+			return fmt.Errorf("failed to fetch %s: %v", ref, err)
+		}
+	} else if branch != "" {
+		fmt.Fprintf(os.Stderr, "This will download and execute code from branch %s, continue? [y/n] ", branch)
+		var answer string
+		if fmt.Scanln(&answer); answer != "y" {
+			return fmt.Errorf("interrupted")
+		}
+
+		// ls-remote outputs a number of lines like:
+		// 5f01333bf1d4048b37fe5c8b44d3ed77604de14d	refs/heads/dev.go2go
+		refs, err := gitOutput("ls-remote")
+		if err != nil {
+			return fmt.Errorf("failed to list remotes: %v", err)
+		}
+		r := regexp.MustCompile(`refs/heads/` + branch)
+		match := r.FindAllStringSubmatch(string(refs), -1)
+		if match == nil {
+			return fmt.Errorf("branch %v not found", branch)
+		}
+		var ref string
+		for _, m := range match {
+			ref = m[0]
+		}
+		log.Printf("Fetching branch %v...", branch)
 		if err := git("fetch", "origin", ref); err != nil {
 			return fmt.Errorf("failed to fetch %s: %v", ref, err)
 		}
