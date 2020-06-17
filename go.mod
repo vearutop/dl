@@ -1,3 +1,3 @@
-module golang.org/dl
+module github.com/vearutop/dl
 
 go 1.11
